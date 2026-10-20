@@ -122,4 +122,38 @@ for n in rl:
     plt.tight_layout(); plt.savefig(FIG / f"policy_map_{n.lower().replace('-', '_')}.png", dpi=150)
     plt.close()
 
+# Plot 5: does the agent cut prices near departure when stock is left over?
+# Seasons are grouped by how many seats were still unsold 15 days before departure.
+CUT = 15
+for n in rl:
+    agent = next(a for a in agents if a.name == n)
+    seats_at_cut, price_rows = [], []
+    for _ in range(N_SEASONS):
+        obs, _ = env.reset()
+        done, seats, row = False, None, np.full(CUT, np.nan)
+        while not done:
+            d = int(obs[1])
+            if d <= CUT and seats is None:
+                seats = int(obs[0])
+            obs, _, done, _, info = env.step(agent.act(obs))
+            if d <= CUT:
+                row[CUT - d] = info["price"]          # index 0 = 15 days left ... 14 = 1 day left
+        if seats is not None:
+            seats_at_cut.append(seats); price_rows.append(row)
+    seats_at_cut, price_rows = np.array(seats_at_cut), np.array(price_rows)
+    lo_q, hi_q = np.quantile(seats_at_cut, [1 / 3, 2 / 3])
+    groups = [(f"Few seats left (<= {int(lo_q)})", seats_at_cut <= lo_q),
+              ("Middle", (seats_at_cut > lo_q) & (seats_at_cut < hi_q)),
+              (f"Many seats left (>= {int(hi_q)})", seats_at_cut >= hi_q)]
+    plt.figure(figsize=(9, 5))
+    x = np.arange(CUT, 0, -1)
+    for (label, mask), color in zip(groups, ["#378ADD", "#888780", "#D85A30"]):
+        plt.plot(x, np.nanmean(price_rows[mask], axis=0), lw=2.5, label=f"{label}  (n={mask.sum()})", color=color)
+    plt.gca().invert_xaxis()
+    plt.xlabel("Days left until departure"); plt.ylabel("Average price charged ($)")
+    plt.title(f"{n}: pricing in the final {CUT} days, by unsold stock")
+    plt.legend(loc="upper center", bbox_to_anchor=(0.5, -0.15), ncol=3, fontsize=8)
+    plt.tight_layout()
+    plt.savefig(FIG / f"late_season_{n.lower().replace('-', '_')}.png", dpi=150); plt.close()
+
 print(f"\nSaved figures to {FIG}")
