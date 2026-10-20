@@ -1,0 +1,4 @@
+# Full set for training and evaluation (the deployed app only needs requirements.txt)
+-r requirements.txt
+torch
+seaborn
